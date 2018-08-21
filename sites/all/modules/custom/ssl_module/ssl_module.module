@@ -1,0 +1,207 @@
+<?php 
+
+function ssl_module_block_info() {
+	$blocks['ssl_certificates'] = array( 
+    'info' => t('SSL Certificates'), 
+    'cache' => DRUPAL_CACHE_PER_ROLE,
+  );
+	return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ *
+ * This hook generates the contents of the blocks themselves.
+ */
+function ssl_module_block_view($delta = '') { 
+	$block = array();
+  switch ($delta) {
+  	case 'ssl_certificates':
+  		$block['subject'] = 'Список SSL-сертификатов'; 
+      $block['content'] = block_ssl_certificates();
+  		break;
+  }
+  return $block;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function ssl_module_menu() {
+  $items = array();
+  $items['ssl'] = array(
+  	'title' => 'Каталог ssl-сертификатов',
+  	'description' => 'Блок с каталогом и фильтром SSL-сертификатов',
+  	'page callback' => 'ssl_cert_test',
+  	'access callback' => true,
+  	'type' => MENU_CALLBACK
+  );
+
+  return $items;
+}
+
+function ssl_cert_test() {
+	return '';
+}
+
+function ssl_module_json_access() {
+	return TRUE;
+}
+
+function ssl_module_json_data() {
+	$filename = _ssl_modules_get_jsonfile();
+	$string = file_get_contents($filename);
+	$json = json_decode($string);
+	return json_decode($string); 
+}
+
+function _ssl_modules_get_jsonfile() {
+	$filepath = 'public://json/ssl.json'; 
+	return drupal_realpath($filepath);
+}
+
+function block_ssl_certificates() {
+	$form = drupal_get_form('ssl_list_filter_form');
+	$output = drupal_render($form);
+	return $output;
+}
+
+function ssl_list_filter_form($form, $form_state) { 
+
+	$data = ssl_module_json_data();
+
+	$params = $data->parametrs;
+	$ssl = $data->ssllist;
+
+	$notes = _ssl_notes($params);
+
+	$trust_options = _ssl_get_trust_options($params);
+	$application_options = _ssl_get_app_options(); 
+
+	$values = isset($form_state['values']) ? $form_state['values'] : array();
+	$filters = _ssl_get_filter_options($values);
+	
+	$form['trust'] = [
+		'#type' => 'select',
+		'#options' => $trust_options,
+		'#empty_option' => 'Выберите уровень доверия',
+		'#prefix' => '<div class="col-md-3">',
+		'#suffix' => '</div>',
+		'#ajax' => [
+			'callback' => 'ssl_render_list'
+		]
+	];
+	$form['application'] = [
+		'#type' => 'select',
+		'#default_value' => 'dct',
+		'#options' => $application_options,
+		'#empty_option' => 'Или укажите применение',
+		'#prefix' => '<div class="col-md-3">',
+		'#suffix' => '</div>',
+			'#ajax' => [
+				'callback' => 'ssl_render_list'
+			]
+	];
+	$form['subdomains'] = [
+		'#type' => 'checkbox',
+		'#title' => 'Поддомены',
+		'#prefix' => '<div class="col-md-2">',
+		'#suffix' => '</div>',
+		'#ajax' => [
+			'callback' => 'ssl_render_list'
+		]
+	];
+	$form['multidomains'] = [
+		'#type' => 'checkbox',
+		'#title' => 'Субдомены',
+		'#prefix' => '<div class="col-md-2">',
+		'#suffix' => '</div>',
+		'#ajax' => [
+			'callback' => 'ssl_render_list'
+		]
+	];
+	$form['clear'] = [
+		'#type' => 'button',
+		'#value' => 'Очистить фильтр',
+		'#prefix' => '<div class="col-md-2">',
+		'#suffix' => '</div>',
+		'#ajax' => [
+			'callback' => 'ssl_render_list'
+		]
+	];
+	$form['result'] = [
+		'#prefix' => '<div id="ssl-list-result" class="col-md-12">',
+		'#suffix' => '</div>',
+		'#type' => 'markup',
+		'#markup' => ssl_list_render($ssl, $notes, $filters), 
+	];
+ 
+	return $form;
+}
+
+function _ssl_get_trust_options($params) {
+	$options = [];
+	foreach ($params as $item) {
+		$options[$item->code] = $item->code . ' ' . $item->transcript;
+	}
+	return $options;
+}
+
+function _ssl_get_app_options() { 
+	$options = ['для частных лиц', 'для сайтов компаний', 'для интернет-торговли', 'для банков и страховых компаний'
+	];
+	return $options;
+}
+
+function ssl_list_render($ssl, $notes, $filters = []) {
+	$ssl = ssl_filter($ssl, $filters);
+	$attributes = array(
+	  'id' => 'my-custom-listing',
+	  'class' => 'ssl-items', // a string or indexed (string) array with the classes for the list tag
+	);
+
+	foreach ($ssl as $item) {
+		if($item->active == 'on') {
+			$class = strtolower(str_replace(' ', '-', $item->owner));
+			$markup = '<h3>' . $item->name . '</h3>';
+			$markup .= '<span class="' . strtolower($item->trust) .'">' . $item->trust . '</span>';
+			$markup .= theme_item_list(array('items' => $notes[$item->trust], 'title' => '', 'type' => 'ul', 'attributes' => ['class' => 'notes']));         
+			$items[] = [
+				'data' => $markup,
+				'class' => ['ssl-item', $class]
+			];
+		}
+	}
+	dpm($items);
+	return theme_item_list(array('items' => $items, 'title' => '', 'type' => 'ul', 'attributes' => $attributes));
+}
+
+function ssl_render_list($form, $form_state) {
+	dpm($form_state['values']);
+	$commands = array(); 
+  $commands[] = ajax_command_replace("#ssl-list-result", '<div id="ssl-list-result" class="col-md-12">Updated after_command_example ' . date('r') . '</div>');
+  return array('#type' => 'ajax', '#commands' => $commands);
+}
+
+
+function _ssl_get_filter_options($values) {
+	$filters = [
+		'trust' => isset($values['trust']) ? $values['trust'] : false,
+		'application' => isset($values['application']) ? $values['application'] : false,
+		'subdomains' => isset($values['subdomains']) ? $values['subdomains'] : 0,
+		'multidomains' => isset($values['multidomains']) ? $values['multidomains'] : 0,
+	];
+	return $filters;
+}
+
+function _ssl_notes($params) {
+	foreach ($params as $param) {
+		$notes[$param->code] = $param->note;
+	}
+	return $notes;
+}
+
+function ssl_filter($ssl, $filters) {
+	dpm($filters);
+	return $ssl;
+}

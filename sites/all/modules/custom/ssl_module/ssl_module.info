@@ -1,0 +1,3 @@
+name = SSL Certificates
+description = Test module certificates from json file
+core = 7.x

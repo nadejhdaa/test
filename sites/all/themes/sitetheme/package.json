@@ -1,0 +1,29 @@
+{
+  "name": "test",
+  "version": "1.0.0",
+  "description": "sc",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "nadejhdaa",
+  "license": "ISC",
+  "devDependencies": {
+    "gulp": "github:gulpjs/gulp#4.0",
+    "gulp-autoprefixer": "^4.1.0",
+    "gulp-less": "^4.0.1",
+    "gulp-util": "^3.0.8"
+  },
+  "dependencies": {
+    "gulp-cli": "^2.0.1"
+  },
+  "optionalDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@gitlab.com/nadejhda_adamova/nkp.git"
+  },
+  "bugs": {
+    "url": "https://gitlab.com/nadejhda_adamova/nkp/issues"
+  },
+  "homepage": "https://gitlab.com/nadejhda_adamova/nkp#README"
+}
